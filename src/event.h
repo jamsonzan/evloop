@@ -9,8 +9,13 @@
 
 namespace libevent {
 
-enum { EV_READ = 0x01, EV_WRITE = 0x02, EV_CLOSED = 0x04, EV_TIMEOUT = 0x08, EV_SIGNAL = 0x10 };
-
+enum {
+    EV_READ = 0x01,
+    EV_WRITE = 0x02,
+    EV_CLOSED = 0x04,
+    EV_TIMEOUT = 0x08,
+    EV_SIGNAL = 0x10
+};
 
 static int a = 99;
 

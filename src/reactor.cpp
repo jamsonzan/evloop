@@ -3,6 +3,7 @@
 //
 
 #include <cerrno>
+#include <functional>
 #include "event.h"
 #include "reactor.h"
 
@@ -32,9 +33,7 @@ int libevent::epoll_reactor::del(int fd) {
     return 0;
 }
 
-int libevent::epoll_reactor::dispatch(int timeout_sec,
-                                      void (*handle)(void *arg, int fd, int events),
-                                      void *arg) {
+int libevent::epoll_reactor::dispatch(int timeout_sec, const std::function<void (int fd, int events)>& handle) {
     int timeout_msec = -1;
     if (timeout_sec >= 0) {
         timeout_msec = timeout_sec * 1000;
@@ -62,14 +61,20 @@ int libevent::epoll_reactor::dispatch(int timeout_sec,
         } else if ((what & EPOLLHUP) && !(what & EPOLLRDHUP)) {
             events = EV_READ | EV_WRITE;
         } else {
-            if (what | EPOLLIN) events |= EV_READ;
-            if (what | EPOLLOUT) events |= EV_WRITE;
-            if (what | EPOLLRDHUP) events |= EV_CLOSED;
+            if (what & EPOLLIN) {
+                events |= EV_READ;
+            }
+            if (what & EPOLLOUT) {
+                events |= EV_WRITE;
+            }
+            if (what & EPOLLRDHUP) {
+                events |= EV_CLOSED;
+            }
         }
 
         if (!events) continue;
 
-        handle(arg, fd, events);
+        handle(fd, events);
     }
 
     return 0;

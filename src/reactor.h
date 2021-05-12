@@ -8,7 +8,6 @@
 #include <unistd.h>
 #include <exception>
 #include <sys/epoll.h>
-#include <sys/timerfd.h>
 
 namespace libevent {
 
@@ -26,7 +25,7 @@ public:
     int add(int fd, int events);
     int mod(int fd, int events);
     int del(int fd);
-    int dispatch(int timeout, void (*handle)(void *arg, int fd, int events), void *arg);
+    int dispatch(int timeout, const std::function<void (int fd, int events)>& handle);
 
     ~epoll_reactor() {
         if (epoll_fd_ >= 0) {

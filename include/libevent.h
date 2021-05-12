@@ -6,7 +6,7 @@
 #define LIBEVENT2_LIBEVENT_H
 
 #include <cstddef>
-#include <event.h>
+#include "event.h"
 
 namespace libevent {
     void print_hello_world();
