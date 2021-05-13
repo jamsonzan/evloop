@@ -5,7 +5,7 @@ project(libevent2)
 
 add_subdirectory(./example)
 
-add_library(libevent src/reactor.h src/reactor.cpp include/event.h src/event.cpp src/driver_io.h src/driver_signal.h src/driver_timer.h)
+add_library(libevent src/reactor.h src/reactor.cpp include/event.h src/event.cpp src/driver_io.h src/driver_signal.h src/driver_timer.h src/driver_signal.cpp)
 
 include_directories(./include)
 

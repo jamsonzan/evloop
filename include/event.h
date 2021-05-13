@@ -31,20 +31,21 @@ typedef std::function<void ()> UserCallback;
 class Event {
 public:
     // IO Event Construct
-    Event(EventBase* base, int fd, IOCallback cb) :
+    Event(EventBase* base, int fd, IOCallback cb) : priority_(5),
         base_(base), type_(IO), iocb_(std::move(cb)), fd_(fd), interest(0), flags(INIT) {};
     // SIGNAL Event Construct
-    Event(EventBase* base, int signum, SignalCallback cb) :
+    Event(EventBase* base, int signum, SignalCallback cb) : priority_(5),
             base_(base), type_(SIGNAL), signalcb_(std::move(cb)), signum_(signum),flags(INIT) {
         EnableSignal();
     };
     // TIMER Event Construct
-    Event(EventBase* base, timeval *deadline, TimerCallback cb) :
+    Event(EventBase* base, timeval *deadline, TimerCallback cb) : priority_(5),
             base_(base), type_(TIMER), timercb_(std::move(cb)), deadline_(*deadline), flags(INIT) {
         SetDeadline(deadline);
     };
     // USER Event Construct
-    Event(EventBase* base, UserCallback cb) : base_(base), type_(USER), usercb_(std::move(cb)) {}
+    Event(EventBase* base, UserCallback cb) : priority_(5),
+            base_(base), type_(USER), usercb_(std::move(cb)) {}
 
     Event(const Event&) = delete;
     Event& operator=(const Event&) = delete;
@@ -52,7 +53,15 @@ public:
     ~Event();
 
     // follow used for IO, SIGNAL, TIMER, USER
-    Event* SetPriority(int priority) { priority_ = priority; return this; }
+    Event* SetPriority(int priority) {
+        if (priority < 0) {
+            priority = 0;
+        } else if (priority >= 10) {
+            priority = 9;
+        }
+        priority_ = priority;
+        return this;
+    }
     Event* SetDeadline(timeval* tv);
     Event* CancelDeadline();
 
@@ -93,10 +102,23 @@ private:
 
     UserCallback usercb_;
 
-    void ExecuteIOCB() { iocb_(fd_, what, is_deadline_); }
-    void ExecuteSignalCB() { while (ncaught_-- > 0) { signalcb_(signum_, is_deadline_); } }
-    void ExecuteTimerCB() { timercb_(&now); }
+    void ExecuteIOCB() {
+        iocb_(fd_, what, is_deadline_);
+        is_deadline_ = false;
+    }
+    void ExecuteSignalCB() {
+        while (ncaught_-- > 0) {
+            signalcb_(signum_, is_deadline_);
+        }
+        is_deadline_ = false;
+    }
+    void ExecuteTimerCB() {
+        timercb_(&now);
+    }
     void ExecuteUserCB() { usercb_(); }
+
+    // EventBase::actives list
+    std::list<Event*>::iterator it;
 };
 
 
@@ -117,11 +139,12 @@ private:
     friend TimerDriver;
     void ActiveInternal(Event* e);
     void ExecuteActives();
+    void RemoveActive(Event* e);
     bool done;
     IODriver* io_driver;
     SignalDriver* signal_driver;
     TimerDriver* timer_driver;
-    std::list<Event*> actives;
+    std::list<Event*> actives[10];
 };
 
 }

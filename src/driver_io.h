@@ -109,6 +109,11 @@ public:
         }
         c->new_events = new_events;
 
+        if (c->new_events != c->old_events && c->change_idx < 0) {
+            change_list.push_back(c);
+            c->change_idx = change_list.size() - 1;
+        }
+
         for (auto it = c->events_list.begin(); it != c->events_list.end(); ++it) {
             if ((*it) == e) {
                 c->events_list.erase(it);
@@ -116,13 +121,14 @@ public:
                 break;
             }
         }
+        e->interest = 0;
     }
 
-    int Dispatch(int timeout_sec) {
+    int Dispatch(int timeout_msec) {
         if (ApplyChangeList() < 0) {
             return -1;
         }
-        return reactor_.dispatch(timeout_sec, [&](int fd, int what){
+        return reactor_.dispatch(timeout_msec, [&](int fd, int what){
             ctx* c = ctxs[fd];
             assert(c != nullptr);
             for (auto it = c->events_list.begin(); it != c->events_list.end(); ++it) {
@@ -158,21 +164,20 @@ private:
     int ApplyChangeList() {
         for (int i = 0; i < change_list.size(); ++i) {
             ctx* c = change_list[i];
+            int res = 0;
             if (c->old_events == 0 && c->new_events != 0) {
-                int res = reactor_.add(c->fd, c->new_events);
-                if (res < 0) {
-                    return res;
-                }
+                res = reactor_.add(c->fd, c->new_events);
             }
             if (c->old_events != 0 && c->new_events != 0 && c->old_events != c->new_events) {
-                int res = reactor_.mod(c->fd, c->new_events);
-                if (res < 0) {
-                    return res;
-                }
+                res = reactor_.mod(c->fd, c->new_events);
             }
             if (c->old_events != 0 && c->new_events == 0) {
-                int res = reactor_.del(c->fd);
-                if (res < 0) {
+                res = reactor_.del(c->fd);
+            }
+            if (res < 0) {
+                if (errno == ENOENT || errno == EBADF || errno == EPERM) {
+                    // fd already closed is fine too.
+                } else {
                     return res;
                 }
             }

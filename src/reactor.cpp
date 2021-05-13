@@ -33,11 +33,7 @@ int libevent::epoll_reactor::del(int fd) {
     return 0;
 }
 
-int libevent::epoll_reactor::dispatch(int timeout_sec, const std::function<void (int fd, int events)>& handle) {
-    int timeout_msec = -1;
-    if (timeout_sec >= 0) {
-        timeout_msec = timeout_sec * 1000;
-    }
+int libevent::epoll_reactor::dispatch(int timeout_msec, const std::function<void (int fd, int events)>& handle) {
     if (timeout_msec > max_epoll_timeout_msec) {
         timeout_msec = max_epoll_timeout_msec;
     }

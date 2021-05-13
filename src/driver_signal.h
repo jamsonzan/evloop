@@ -45,7 +45,7 @@ public:
                 }
             }
         });
-        pipe_event->EnableIO(EV_READ)->SetPriority(0);
+        pipe_event->SetPriority(0)->EnableIO(EV_READ)->SetPriority(0);
     }
 
     ~SignalDriver() {

@@ -122,8 +122,116 @@ void TestReactorStdin() {
     close(listener);
 }
 
-void TestEventBaseEcho() {
+libevent::EventBase* base = nullptr;
 
+void TestEventBaseEcho() {
+    base = new libevent::EventBase();
+    int listener = tcp_server_init(9001, 5);
+    if (listener < 0) {
+        perror("listen");
+        delete base;
+        exit(1);
+    }
+
+    struct client {
+        client(int cfd) : fd(cfd) {
+            read_ev = new libevent::Event(base, fd, [this](int _, int what, bool deadline) {
+                if (deadline) {
+                    printf("fd %d read access deadline, goaway.\n", fd);
+                    delete this;
+                    return;
+                }
+                int n = read(fd, buf, sizeof(buf));
+                if (n <= 0) {
+                    if (errno == EWOULDBLOCK) {
+                        return;
+                    } else if (n < 0) {
+                        perror("read");
+                    }
+                    // go away
+                    printf("fd %d go away\n", fd);
+                    delete this;
+                    return;
+                }
+                len = n;
+                switch_to_write();
+            });
+            write_ev = new libevent::Event(base, fd, [this](int _, int what, bool deadline) {
+                if (deadline) {
+                    printf("fd %d write access deadline, goaway.\n", fd);
+                    delete this;
+                    return;
+                }
+                int n = write(fd, buf, len);
+                if (n <= 0) {
+                    if (errno == EWOULDBLOCK) {
+                        return;
+                    } else if (n < 0) {
+                        perror("write");
+                    }
+                    // go away
+                    printf("fd %d go away\n", fd);
+                    delete this;
+                    return;
+                }
+                len -= n;
+                assert(len >= 0);
+                if (len > 0) {
+                    memcpy(buf, buf+n, len);
+                } else if (len == 0) {
+                    switch_to_read();
+                }
+            });
+            switch_to_read();
+        }
+
+        void switch_to_read() {
+            write_ev->DisableIO();
+            timeval tv = {0, 0};
+            gettimeofday(&tv, nullptr);
+            tv.tv_sec += 10;
+            read_ev->SetDeadline(&tv)->EnableIO(libevent::EV_READ);
+        }
+
+        void switch_to_write() {
+            read_ev->DisableIO();
+            timeval tv = {0, 0};
+            gettimeofday(&tv, nullptr);
+            tv.tv_sec += 10;
+            write_ev->SetDeadline(&tv)->EnableIO(libevent::EV_WRITE);
+        }
+
+        ~client() {
+            delete read_ev;
+            delete write_ev;
+            close(fd);
+        }
+        int fd;
+        int len;
+        char buf[1024];
+        libevent::Event *read_ev;
+        libevent::Event *write_ev;
+    };
+
+    auto listener_ev = new libevent::Event(base, listener, [](int fd, int what, bool deadline){
+        struct sockaddr_in caddr;
+        socklen_t len = sizeof(caddr);
+        int cfd = accept4(fd, (struct sockaddr *) &caddr, &len,
+                          SOCK_CLOEXEC | SOCK_NONBLOCK);
+        if (cfd < 0) {
+            perror("accept4");
+            return ;
+        }
+        new client(cfd);
+    });
+    listener_ev->SetPriority(0)->EnableIO(libevent::EV_READ);
+    if (base->Dispatch() < 0) {
+        perror("base->Dispatch");
+    }
+
+    close(listener);
+    delete listener_ev;
+    delete base;
 }
 
 typedef struct sockaddr SA;

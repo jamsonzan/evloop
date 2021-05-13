@@ -23,7 +23,7 @@ public:
 
     void Deregister(Event* e) {
         if (e->flags & Event::TIMER_WAIT) {
-            ordered_set.erase(e);
+            auto s = ordered_set.erase(e);
             e->flags &= ~Event::TIMER_WAIT;
         }
     }
@@ -75,6 +75,9 @@ private:
 
     struct Compare {
         bool operator()(const Event* lhs, const Event* rhs) {
+            if (lhs == rhs) {
+                return false;
+            }
             return compare_time(&lhs->deadline_, &rhs->deadline_) < 0;
         }
     };

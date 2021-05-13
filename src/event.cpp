@@ -13,18 +13,20 @@ namespace libevent {
 
 Event* Event::SetDeadline(timeval *tv) {
     if (this->type_ != TIMER && this->timercb_ == nullptr) {
-        this->deadline_ = *tv;
         this->timercb_ = [this](timeval* now) {
             this->is_deadline_ = true;
             this->now = *now;
+            this->base_->ActiveInternal(this);
         };
     }
+    this->deadline_ = *tv;
     base_->timer_driver->Register(this);
     return this;
 }
 
 Event *Event::CancelDeadline() {
     base_->timer_driver->Deregister(this);
+    this->timercb_ = nullptr;
     return this;
 }
 
@@ -62,6 +64,7 @@ Event::~Event() {
     CancelDeadline();
     DisableIO();
     DisableSignal();
+    base_->RemoveActive(this);
 }
 
 EventBase::EventBase() : done(false) {
@@ -77,32 +80,47 @@ void EventBase::Active(Event *e) {
 }
 
 void EventBase::ActiveInternal(Event* e) {
-    assert(!(e->flags & Event::IN_ACTIVES));
-    actives.push_back(e);
+    if (e->flags & Event::IN_ACTIVES) {
+        return;
+    }
+    actives[e->priority_].push_front(e);
+    e->it = actives[e->priority_].begin();
     e->flags |= Event::IN_ACTIVES;
 }
 
-void EventBase::ExecuteActives() {
-    for (auto it = actives.begin(); it != actives.end(); ++it) {
-        switch ((*it)->type_) {
-            case Event::IO:
-                (*it)->ExecuteIOCB();
-                break;
-            case Event::SIGNAL:
-                (*it)->ExecuteSignalCB();
-                break;
-            case Event::TIMER:
-                (*it)->ExecuteTimerCB();
-                break;
-            case Event::USER:
-                (*it)->ExecuteUserCB();
-                break;
-            default:
-                assert(0);
-        }
-        (*it)->flags &= ~Event::IN_ACTIVES;
+void EventBase::RemoveActive(Event* e) {
+    if (e->flags & Event::IN_ACTIVES) {
+        actives[e->priority_].erase(e->it);
+        e->it = actives[e->priority_].end();
+        e->flags &= ~Event::IN_ACTIVES;
     }
-    actives.clear();
+}
+
+void EventBase::ExecuteActives() {
+    for (int i = 0; i < 10; ++i) {
+        auto actives_i = &actives[i];
+        for (auto it = actives_i->begin(); it != actives_i->end();) {
+            switch ((*it)->type_) {
+                case Event::IO:
+                    (*it)->ExecuteIOCB();
+                    break;
+                case Event::SIGNAL:
+                    (*it)->ExecuteSignalCB();
+                    break;
+                case Event::TIMER:
+                    (*it)->ExecuteTimerCB();
+                    break;
+                case Event::USER:
+                    (*it)->ExecuteUserCB();
+                    break;
+                default:
+                    assert(0);
+            }
+            RemoveActive((*it));
+            it = actives_i->begin();
+        }
+        assert(actives_i->empty());
+    }
 }
 
 int EventBase::Dispatch() {
@@ -124,22 +142,23 @@ int EventBase::Dispatch() {
             return -1;
         }
 
-        int timeout_sec = -1;
+        int timeout_msec = -1;
         timer_driver->NextDeadline(next_deadline);
         if (next_deadline.tv_sec < 0) {
             // has not deadline event
-            timeout_sec = -1;
+            timeout_msec = -1;
         } else {
             timersub(&next_deadline, &now, &delta);
             if (delta.tv_sec <= 0) {
                 // already access deadline
-                timeout_sec = 0;
+                timeout_msec = 0;
             } else {
-                timeout_sec = delta.tv_sec;
+                // round up 3ms, avoid busy polling.
+                timeout_msec = delta.tv_sec*1000 + delta.tv_usec/1000 + 3;
             }
         }
 
-        if (io_driver->Dispatch(timeout_sec) < 0) {
+        if (io_driver->Dispatch(timeout_msec) < 0) {
             perror("io_driver->Dispatch");
             return -1;
         }
@@ -147,6 +166,7 @@ int EventBase::Dispatch() {
             perror("gettimeofday");
             return -1;
         }
+        printf("Dispatch onece\n");
         timer_driver->Dispatch(&now);
         ExecuteActives();
     }
