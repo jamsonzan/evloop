@@ -8,7 +8,7 @@
 #include "reactor.h"
 
 int libevent::epoll_reactor::add(int fd, int events) {
-    struct epoll_event event;
+    struct epoll_event event = {0, 0};
     event.data.fd = fd;
     if (events & EV_READ) event.events |= EPOLLIN;
     if (events & EV_WRITE) event.events |= EPOLLOUT;
@@ -18,7 +18,7 @@ int libevent::epoll_reactor::add(int fd, int events) {
 }
 
 int libevent::epoll_reactor::mod(int fd, int events) {
-    struct epoll_event event;
+    struct epoll_event event = {0, 0};
     event.data.fd = fd;
     if (events & EV_READ) event.events |= EPOLLIN;
     if (events & EV_WRITE) event.events |= EPOLLOUT;
@@ -28,7 +28,7 @@ int libevent::epoll_reactor::mod(int fd, int events) {
 }
 
 int libevent::epoll_reactor::del(int fd) {
-    struct epoll_event event;
+    struct epoll_event event = {0, 0};
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fd, &event) < 0) return -1;
     return 0;
 }
@@ -42,6 +42,7 @@ int libevent::epoll_reactor::dispatch(int timeout_sec, const std::function<void 
         timeout_msec = max_epoll_timeout_msec;
     }
 
+    // res==0可能是超时
     int res = epoll_wait(epoll_fd_, &events_[0], max_events, timeout_msec);
     if (res < 0) {
         if (errno != EINTR) {

@@ -6,8 +6,12 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
-#include "event.h"
+#include <sys/time.h>
 #include "reactor.h"
+#include "driver_io.h"
+#include "driver_signal.h"
+#include "driver_timer.h"
+#include "event.h"
 
 int tcp_server_init(int port, int listen_num);
 
@@ -36,7 +40,7 @@ void TestReactorStdin() {
     int listener = tcp_server_init(9002, 5);
     if (listener < 0) {
         perror("listen");
-        return;
+        exit(1);
     }
     reactor.add(listener, libevent::EV_READ);
     while (1) {
@@ -118,39 +122,38 @@ void TestReactorStdin() {
     close(listener);
 }
 
+void TestEventBaseEcho() {
+
+}
+
 typedef struct sockaddr SA;
-int tcp_server_init(int port, int listen_num)
-{
+int tcp_server_init(int port, int listen_num) {
     int errno_save;
     int listener;
-
     listener = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC |
     SOCK_NONBLOCK, 0);
     if( listener == -1 )
         return -1;
-
     struct sockaddr_in sin;
     sin.sin_family = AF_INET;
     sin.sin_addr.s_addr = INADDR_ANY;
     sin.sin_port = htons(port);
-
-    if( bind(listener, (SA*)&sin, sizeof(sin)) < 0 )
-        goto error;
-
-    if( listen(listener, listen_num) < 0 )
-        goto error;
-
+    if( bind(listener, (SA*)&sin, sizeof(sin)) < 0 ) goto error;
+    if( listen(listener, listen_num) < 0 ) goto error;
     return listener;
-
     error:
     errno_save = errno;
     close(listener);
     errno = errno_save;
-
     return -1;
 }
 
 int main() {
+    timeval tv = {0, 0};
+    gettimeofday(&tv, nullptr);
+    printf("start test time sec %ld usec %ld\n", tv.tv_sec, tv.tv_usec);
+
     // TestReactorStdin();
-    TestReactorEcho();
+    // TestReactorEcho();
+    TestEventBaseEcho();
 }

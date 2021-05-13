@@ -25,7 +25,7 @@ public:
     int add(int fd, int events);
     int mod(int fd, int events);
     int del(int fd);
-    int dispatch(int timeout, const std::function<void (int fd, int events)>& handle);
+    int dispatch(int timeout_sec, const std::function<void (int fd, int events)>& handle);
 
     ~epoll_reactor() {
         if (epoll_fd_ >= 0) {
