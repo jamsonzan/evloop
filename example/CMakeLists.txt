@@ -1,6 +1,6 @@
-add_executable(helloworld helloworld/main.cpp)
+add_executable(chat_room chat_room/main.cpp)
 add_executable(test test/main.cpp)
 include_directories(../include)
 include_directories(../src)
-target_link_libraries(helloworld libevent pthread)
+target_link_libraries(chat_room libevent pthread)
 target_link_libraries(test libevent pthread)

@@ -179,7 +179,6 @@ int EventBase::Dispatch() {
             perror("gettimeofday");
             return -1;
         }
-        printf("Dispatch onece\n");
         timer_driver->Dispatch(&now);
         ExecuteActives();
     }

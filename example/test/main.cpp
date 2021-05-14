@@ -217,6 +217,7 @@ void TestEventBaseEcho() {
     printf("base->Dispatch return.\n");
     close(listener);
     delete listener_ev;
+    delete sig_ev2;
     delete base;
 }
 
