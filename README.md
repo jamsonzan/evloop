@@ -1,1 +1,1 @@
-libevent cpp
+libevent core cpp
