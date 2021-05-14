@@ -35,36 +35,18 @@ public:
         assert(c->fd == fd);
 
         int interest = e->interest;
-        if (interest & EV_READ) {
-            c->nread++;
-        }
-        if (interest & EV_WRITE) {
-            c->nwrite++;
-        }
-        if (interest & EV_CLOSED) {
-            c->nclose++;
-        }
+        if (interest & EV_READ) c->nread++;
+        if (interest & EV_WRITE) c->nwrite++;
+        if (interest & EV_CLOSED) c->nclose++;
 
-        if (old_interest & EV_READ) {
-            c->nread--;
-        }
-        if (old_interest & EV_WRITE) {
-            c->nwrite--;
-        }
-        if (old_interest & EV_CLOSED) {
-            c->nclose--;
-        }
+        if (old_interest & EV_READ) c->nread--;
+        if (old_interest & EV_WRITE) c->nwrite--;
+        if (old_interest & EV_CLOSED) c->nclose--;
 
         int new_events = 0;
-        if (c->nread > 0) {
-            new_events |= EV_READ;
-        }
-        if (c->nwrite > 0) {
-            new_events |= EV_WRITE;
-        }
-        if (c->nclose > 0) {
-            new_events |= EV_CLOSED;
-        }
+        if (c->nread > 0) new_events |= EV_READ;
+        if (c->nwrite > 0) new_events |= EV_WRITE;
+        if (c->nclose > 0) new_events |= EV_CLOSED;
         c->new_events = new_events;
 
         if (c->new_events != c->old_events && c->change_idx < 0) {
@@ -87,26 +69,14 @@ public:
         ctx* c = ctxs[fd];
         assert(c != nullptr);
 
-        if (interest & EV_READ) {
-            c->nread--;
-        }
-        if (interest & EV_WRITE) {
-            c->nwrite--;
-        }
-        if (interest & EV_CLOSED) {
-            c->nclose--;
-        }
+        if (interest & EV_READ) c->nread--;
+        if (interest & EV_WRITE) c->nwrite--;
+        if (interest & EV_CLOSED) c->nclose--;
 
         int new_events = 0;
-        if (c->nread > 0) {
-            new_events |= EV_READ;
-        }
-        if (c->nwrite > 0) {
-            new_events |= EV_WRITE;
-        }
-        if (c->nclose > 0) {
-            new_events |= EV_CLOSED;
-        }
+        if (c->nread > 0) new_events |= EV_READ;
+        if (c->nwrite > 0) new_events |= EV_WRITE;
+        if (c->nclose > 0) new_events |= EV_CLOSED;
         c->new_events = new_events;
 
         if (c->new_events != c->old_events && c->change_idx < 0) {
