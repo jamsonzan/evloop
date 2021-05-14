@@ -205,9 +205,16 @@ void TestEventBaseEcho() {
         new client(cfd);
     });
     listener_ev->SetPriority(0)->EnableIO(libevent::EV_READ);
+
+    libevent::Event* sig_ev2 = new libevent::Event(base, SIGINT, [&](int signum, bool deadline){
+        printf("sig_ev2 get signum %d\n", signum);
+        sig_ev2->DisableSignal();
+        base->Shutdown();
+    });
     if (base->Dispatch() < 0) {
         perror("base->Dispatch");
     }
+    printf("base->Dispatch return.\n");
     close(listener);
     delete listener_ev;
     delete base;
@@ -221,7 +228,7 @@ int main() {
 
     // TestReactorStdin();
     // TestReactorEcho();
-    // TestEventBaseEcho();
+     TestEventBaseEcho();
     // TestTimerDriver();
     // TestSignalDriver();
 }
