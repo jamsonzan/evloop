@@ -78,7 +78,11 @@ private:
             if (lhs == rhs) {
                 return false;
             }
-            return compare_time(&lhs->deadline_, &rhs->deadline_) < 0;
+            int res = compare_time(&lhs->deadline_, &rhs->deadline_);
+            if (res == 0) {
+                return lhs < rhs;
+            }
+            return res < 0;
         }
     };
     std::set<Event*, Compare> ordered_set;

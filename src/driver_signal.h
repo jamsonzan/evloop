@@ -118,6 +118,7 @@ private:
 
     static int sig_handler_fd;
     static void sig_handler(int signum) {
+        printf("driver get signal %d\n", signum);
         uint8_t msg = signum;
         if (write(sig_handler_fd, (char*)&msg, 1) <= 0) {
             perror("write sig_handler_fd");

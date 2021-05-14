@@ -63,7 +63,9 @@ public:
         return this;
     }
     Event* SetDeadline(timeval* tv);
+    Event* SetTimeout(int sec);
     Event* CancelDeadline();
+    Event* CancelTimeout();
 
     // follow only used for IO
     Event* EnableIO(int events);
@@ -107,8 +109,12 @@ private:
         is_deadline_ = false;
     }
     void ExecuteSignalCB() {
-        while (ncaught_-- > 0) {
+        if (is_deadline_) {
             signalcb_(signum_, is_deadline_);
+        } else {
+            while (ncaught_-- > 0) {
+                signalcb_(signum_, is_deadline_);
+            }
         }
         is_deadline_ = false;
     }

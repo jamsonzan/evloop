@@ -30,6 +30,17 @@ Event *Event::CancelDeadline() {
     return this;
 }
 
+Event* Event::SetTimeout(int sec) {
+    timeval tv = {0, 0};
+    gettimeofday(&tv, nullptr);
+    tv.tv_sec += sec;
+    return SetDeadline(&tv);
+}
+
+Event* Event::CancelTimeout() {
+    return CancelDeadline();
+}
+
 Event *Event::EnableIO(int events) {
     if (this->type_ == IO) {
         int old_interest = this->interest;
@@ -41,6 +52,7 @@ Event *Event::EnableIO(int events) {
 
 Event *Event::DisableIO() {
     if (this->type_ == IO) {
+        CancelDeadline();
         base_->io_driver->Deregister(this);
     }
     return this;
@@ -55,6 +67,7 @@ Event* Event::EnableSignal() {
 
 Event* Event::DisableSignal() {
     if (this->type_ == SIGNAL) {
+        CancelDeadline();
         base_->signal_driver->Deregister(this);
     }
     return this;

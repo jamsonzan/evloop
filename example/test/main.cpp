@@ -14,19 +14,9 @@
 #include "event.h"
 
 int tcp_server_init(int port, int listen_num);
-
-void TestReactorStdin() {
-    libevent::epoll_reactor reactor;
-    assert(reactor.add(STDIN_FILENO, libevent::EV_READ) >= 0);
-    int res = reactor.dispatch(-1, [&](int fd, int what){
-       assert(fd == STDIN_FILENO);
-       assert(what & libevent::EV_READ);
-       assert(reactor.mod(STDIN_FILENO, libevent::EV_WRITE) >= 0);
-       assert(reactor.del(STDIN_FILENO) >= 0);
-       printf("done\n");
-    });
-    assert(res >= 0);
-}
+void TestReactorStdin();
+void TestTimerDriver();
+void TestSignalDriver();
 
 [[noreturn]] void TestReactorEcho() {
     struct client {
@@ -132,7 +122,6 @@ void TestEventBaseEcho() {
         delete base;
         exit(1);
     }
-
     struct client {
         client(int cfd) : fd(cfd) {
             read_ev = new libevent::Event(base, fd, [this](int _, int what, bool deadline) {
@@ -184,23 +173,14 @@ void TestEventBaseEcho() {
             });
             switch_to_read();
         }
-
         void switch_to_read() {
             write_ev->DisableIO();
-            timeval tv = {0, 0};
-            gettimeofday(&tv, nullptr);
-            tv.tv_sec += 10;
-            read_ev->SetDeadline(&tv)->EnableIO(libevent::EV_READ);
+            read_ev->SetTimeout(10)->EnableIO(libevent::EV_READ);
         }
-
         void switch_to_write() {
             read_ev->DisableIO();
-            timeval tv = {0, 0};
-            gettimeofday(&tv, nullptr);
-            tv.tv_sec += 10;
-            write_ev->SetDeadline(&tv)->EnableIO(libevent::EV_WRITE);
+            write_ev->SetTimeout(10)->EnableIO(libevent::EV_WRITE);
         }
-
         ~client() {
             delete read_ev;
             delete write_ev;
@@ -228,10 +208,124 @@ void TestEventBaseEcho() {
     if (base->Dispatch() < 0) {
         perror("base->Dispatch");
     }
-
     close(listener);
     delete listener_ev;
     delete base;
+}
+
+
+int main() {
+    timeval tv = {0, 0};
+    gettimeofday(&tv, nullptr);
+    printf("start test time sec %ld usec %ld\n", tv.tv_sec, tv.tv_usec);
+
+    // TestReactorStdin();
+    // TestReactorEcho();
+    // TestEventBaseEcho();
+    // TestTimerDriver();
+    // TestSignalDriver();
+}
+
+void TestSignalDriver() {
+    base = new libevent::EventBase();
+
+    int count = 0;
+    libevent::Event* sig_ev1 = new libevent::Event(base, SIGINT, [&](int signum, bool deadline){
+        sig_ev1->SetTimeout(5);
+        if (deadline) {
+            printf("sig_ev1 deadline once.\n");
+            count++;
+            if (count >= 5) {
+                printf("cancel sig_ev1.\n");
+                sig_ev1->DisableSignal();
+                base->Shutdown();
+            }
+            return ;
+        }
+        printf("sig_ev1 get signum %d\n", signum);
+    });
+    sig_ev1->SetTimeout(5);
+
+    libevent::Event* sig_ev2 = new libevent::Event(base, SIGINT, [&](int signum, bool deadline){
+        printf("sig_ev2 get signum %d\n", signum);
+        sig_ev2->CancelTimeout();
+    });
+
+    if (base->Dispatch() < 0) {
+        perror("base->Dispatch");
+    }
+    printf("base->Dispatch return\n");
+
+    delete sig_ev1;
+    delete sig_ev2;
+    delete base;
+}
+
+void TestTimerDriver() {
+    base = new libevent::EventBase();
+    timeval tv = {0, 0};
+    gettimeofday(&tv, nullptr);
+
+    libevent::Event* timer_ev0 = new libevent::Event(base, &tv, [&](timeval* now){
+        printf("ev0 access deadline, now is %ld\n", now->tv_sec);
+        timer_ev0->CancelDeadline();
+    });
+
+    tv.tv_sec += 10;
+    libevent::Event* timer_ev1 = new libevent::Event(base, &tv, [&](timeval* now){
+        printf("ev1 access deadline, now is %ld\n", now->tv_sec);
+        timer_ev1->CancelDeadline();
+    });
+    libevent::Event* timer_ev2 = new libevent::Event(base, &tv, [&](timeval* now){
+        printf("ev2 access deadline, now is %ld\n", now->tv_sec);
+        timer_ev2->CancelDeadline();
+    });
+
+    int count = 0;
+    libevent::Event* timer_ev3 = new libevent::Event(base, &tv, [&](timeval* now){
+        printf("ev3 access deadline, now is %ld\n", now->tv_sec);
+        count++;
+        if (count < 5) {
+            // has not canceled, will busy polling.
+        } else {
+            timer_ev3->CancelDeadline();
+        }
+    });
+    tv.tv_sec += 10;
+    timer_ev3->SetDeadline(&tv); // reset deadline
+
+    libevent::Event* timer_ev4 = new libevent::Event(base, &tv, [](timeval* now){
+        printf("ev4 access deadline, now is %ld\n", now->tv_sec);
+    });
+    timer_ev4->CancelDeadline(); // cancel
+
+    libevent::Event* timer_ev5 = new libevent::Event(base, &tv, [](timeval* now){
+        printf("ev5 access deadline, now is %ld\n", now->tv_sec);
+    });
+    delete timer_ev5;
+
+    if (base->Dispatch() < 0) {
+        perror("base->Dispatch");
+    }
+
+    delete timer_ev1;
+    delete timer_ev2;
+    delete timer_ev3;
+    delete timer_ev4;
+    delete base;
+}
+
+void TestReactorStdin() {
+    libevent::epoll_reactor reactor;
+    assert(reactor.add(STDIN_FILENO, libevent::EV_READ) >= 0);
+    int res = reactor.dispatch(-1, [&](int fd, int what){
+        assert(fd == STDIN_FILENO);
+        assert(what & libevent::EV_READ);
+        assert(reactor.mod(STDIN_FILENO, libevent::EV_WRITE) >= 0);
+        assert(reactor.del(STDIN_FILENO) >= 0);
+        printf("done\n");
+    });
+    assert(res >= 0);
 }
 
 typedef struct sockaddr SA;
@@ -239,7 +333,7 @@ int tcp_server_init(int port, int listen_num) {
     int errno_save;
     int listener;
     listener = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC |
-    SOCK_NONBLOCK, 0);
+                               SOCK_NONBLOCK, 0);
     if( listener == -1 )
         return -1;
     struct sockaddr_in sin;
@@ -254,14 +348,4 @@ int tcp_server_init(int port, int listen_num) {
     close(listener);
     errno = errno_save;
     return -1;
-}
-
-int main() {
-    timeval tv = {0, 0};
-    gettimeofday(&tv, nullptr);
-    printf("start test time sec %ld usec %ld\n", tv.tv_sec, tv.tv_usec);
-
-    // TestReactorStdin();
-    // TestReactorEcho();
-    TestEventBaseEcho();
 }
